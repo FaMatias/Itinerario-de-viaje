@@ -138,59 +138,22 @@
             }, 3000);
         }
 
-        async function generateItinerary(destino, dias, presupuesto, intereses, idioma, retryCount = 0) {
-            const prompt = `Genera un itinerario de viaje detallado para ${dias} días en ${destino}, con un presupuesto ${presupuesto} y enfocado en los siguientes intereses: ${intereses}. Por favor, genera el itinerario completamente en ${idioma}. Dame un objeto JSON con el título del viaje y una lista de objetos, uno por cada día. Cada objeto de día debe incluir: el número de día, una descripción general del día, una lista de lugares a visitar, una lista de comida sugerida y una lista de actividades.`;
+        async function generateItinerary(destino, dias, presupuesto, intereses, idioma) {
+            // Esta es la línea que necesitas. Ya tiene tu URL de Render.
+            const serverUrl = 'https://servidor-proxy-78cv.onrender.com/api/viajes';
             
-            const chatHistory = [{ 
-                role: "user", 
-                parts: [{ text: prompt }] 
-            }];
-
-            const payload = {
-                contents: chatHistory,
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            "titulo_viaje": { "type": "STRING" },
-                            "dias": {
-                                "type": "ARRAY",
-                                "items": {
-                                    "type": "OBJECT",
-                                    "properties": {
-                                        "dia": { "type": "NUMBER" },
-                                        "descripcion": { "type": "STRING" },
-                                        "lugares_a_visitar": { "type": "ARRAY", "items": { "type": "STRING" } },
-                                        "comida_sugerida": { "type": "ARRAY", "items": { "type": "STRING" } },
-                                        "actividades": { "type": "ARRAY", "items": { "type": "STRING" } }
-                                    },
-                                    "propertyOrdering": ["dia", "descripcion", "lugares_a_visitar", "comida_sugerida", "actividades"]
-                                }
-                            }
-                        },
-                        "propertyOrdering": ["titulo_viaje", "dias"]
-                    }
-                }
-            };
-            
-            const apiKey = "";
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            // Los datos que enviamos a nuestro servidor
+            const requestData = { destino, dias, presupuesto, intereses, idioma };
 
             try {
-                const response = await fetch(apiUrl, {
+                const response = await fetch(serverUrl, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(requestData)
                 });
                 
                 if (!response.ok) {
-                    if (response.status === 429 && retryCount < 5) {
-                        await new Promise(resolve => setTimeout(resolve, retryDelay));
-                        retryDelay *= 2;
-                        return generateItinerary(destino, dias, presupuesto, intereses, idioma, retryCount + 1);
-                    }
-                    throw new Error(`API error: ${response.statusText}`);
+                    throw new Error(`Error del servidor: ${response.statusText}`);
                 }
 
                 const result = await response.json();
@@ -201,7 +164,7 @@
                     const json = result.candidates[0].content.parts[0].text;
                     return JSON.parse(json);
                 } else {
-                    throw new Error("Invalid API response format");
+                    throw new Error("Formato de respuesta inválido del servidor");
                 }
             } catch (error) {
                 console.error('Error generating itinerary:', error);
@@ -284,28 +247,33 @@
             tempDiv.style.padding = '10px';
             tempDiv.style.fontFamily = 'Inter, sans-serif';
 
-            // Convertimos el HTML a una imagen y la añadimos al PDF
-            // Esto es un enfoque más robusto para renderizar HTML complejo
-            html2canvas(tempDiv, { scale: 2 }).then(canvas => {
-                const imgData = canvas.toDataURL('image/png');
-                const imgWidth = 210; // A4 width in mm
-                const pageHeight = 295; // A4 height in mm
-                const imgHeight = canvas.height * imgWidth / canvas.width;
-                let heightLeft = imgHeight;
-                let position = 0;
+            // Importamos la librería html2canvas dinámicamente
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+            script.onload = () => {
+                // Convertimos el HTML a una imagen y la añadimos al PDF
+                html2canvas(tempDiv, { scale: 2 }).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const imgWidth = 210; // A4 width in mm
+                    const pageHeight = 295; // A4 height in mm
+                    const imgHeight = canvas.height * imgWidth / canvas.width;
+                    let heightLeft = imgHeight;
+                    let position = 0;
 
-                doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-                heightLeft -= pageHeight;
-
-                while (heightLeft > 0) {
-                    position = heightLeft - imgHeight;
-                    doc.addPage();
                     doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
                     heightLeft -= pageHeight;
-                }
-                
-                doc.save(`${title.replace(/ /g, '_')}.pdf`);
-            });
+
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight;
+                        doc.addPage();
+                        doc.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= pageHeight;
+                    }
+                    
+                    doc.save(`${title.replace(/ /g, '_')}.pdf`);
+                });
+            };
+            document.head.appendChild(script);
         });
     </script>
 </body>
